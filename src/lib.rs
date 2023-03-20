@@ -1,7 +1,8 @@
 use openai_bootstrap::{authorization, ApiResponse, BASE_URL};
 pub use openai_bootstrap::OpenAiError;
-use reqwest::{Client, Method, RequestBuilder};
+use reqwest::{Method, RequestBuilder};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+pub use reqwest::Client;
 
 pub mod chat;
 pub mod completions;
