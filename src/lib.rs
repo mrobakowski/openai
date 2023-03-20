@@ -1,8 +1,10 @@
 use openai_bootstrap::{authorization, ApiResponse, BASE_URL};
 pub use openai_bootstrap::OpenAiError;
 use reqwest::{Method, RequestBuilder};
+use reqwest_eventsource::EventSource;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 pub use reqwest::Client;
+use futures::StreamExt;
 
 pub mod chat;
 pub mod completions;
@@ -28,12 +30,20 @@ where
 
     request = builder(request);
 
-    let api_response: ApiResponse<T> = authorization!(request).send().await?.json().await?;
+    let mut  events = EventSource::new(authorization!(request)).unwrap();
 
-    match api_response {
-        ApiResponse::Ok(t) => Ok(Ok(t)),
-        ApiResponse::Err { error } => Ok(Err(error)),
+    while let Some(event) = events.next().await {
+        dbg!(event);
     }
+
+    // let api_response: ApiResponse<T> = todo!().send().await?.json().await?;
+
+    todo!();
+
+    // match api_response {
+    //     ApiResponse::Ok(t) => Ok(Ok(t)),
+    //     ApiResponse::Err { error } => Ok(Err(error)),
+    // }
 }
 
 async fn openai_get<T>(client: &Client, route: &str) -> ApiResponseOrError<T>
