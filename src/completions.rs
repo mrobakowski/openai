@@ -3,6 +3,7 @@
 
 use super::{models::ModelID, openai_post, ApiResponseOrError, Usage};
 use derive_builder::Builder;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -148,8 +149,8 @@ pub struct CompletionRequest {
 
 impl Completion {
     /// Creates a completion for the provided prompt and parameters
-    async fn create(request: &CompletionRequest) -> ApiResponseOrError<Self> {
-        openai_post("completions", request).await
+    async fn create(client: &Client, request: &CompletionRequest) -> ApiResponseOrError<Self> {
+        openai_post(client, "completions", request).await
     }
 
     pub fn builder(model: ModelID) -> CompletionBuilder {
@@ -158,8 +159,8 @@ impl Completion {
 }
 
 impl CompletionBuilder {
-    pub async fn create(self) -> ApiResponseOrError<Completion> {
-        Completion::create(&self.build().unwrap()).await
+    pub async fn create(self, client: &Client) -> ApiResponseOrError<Completion> {
+        Completion::create(client, &self.build().unwrap()).await
     }
 }
 
@@ -176,7 +177,7 @@ mod tests {
             .prompt("Say this is a test")
             .max_tokens(7)
             .temperature(0.0)
-            .create()
+            .create(&Client::new())
             .await
             .unwrap()
             .unwrap();

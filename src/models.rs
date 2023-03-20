@@ -4,6 +4,7 @@
 
 use super::{openai_get, ApiResponseOrError};
 use openai_proc_macros::generate_model_id_enum;
+use reqwest::Client;
 use serde::Deserialize;
 
 #[derive(Deserialize, Clone)]
@@ -34,8 +35,8 @@ pub struct ModelPermission {
 impl Model {
     //! Retrieves a model instance,
     //! providing basic information about the model such as the owner and permissioning.
-    pub async fn from(id: ModelID) -> ApiResponseOrError<Self> {
-        openai_get(&format!("models/{id}")).await
+    pub async fn from(client: &Client, id: ModelID) -> ApiResponseOrError<Self> {
+        openai_get(client, &format!("models/{id}")).await
     }
 }
 
@@ -92,7 +93,7 @@ mod tests {
     async fn model() {
         dotenv().ok();
 
-        let model = Model::from(ModelID::TextDavinci003).await.unwrap().unwrap();
+        let model = Model::from(&Client::new(), ModelID::TextDavinci003).await.unwrap().unwrap();
 
         assert_eq!(model.id, ModelID::TextDavinci003,);
     }
@@ -101,7 +102,7 @@ mod tests {
     async fn custom_model() {
         dotenv().ok();
 
-        let model = Model::from(ModelID::Custom(
+        let model = Model::from(&Client::new(), ModelID::Custom(
             "davinci:ft-personal-2022-12-12-04-49-51".to_string(),
         ))
         .await

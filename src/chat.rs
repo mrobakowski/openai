@@ -2,6 +2,7 @@
 
 use super::{models::ModelID, openai_post, ApiResponseOrError, Usage};
 use derive_builder::Builder;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -113,14 +114,17 @@ impl ChatCompletion {
             .messages(messages)
     }
 
-    pub async fn create(request: &ChatCompletionRequest) -> ApiResponseOrError<Self> {
-        openai_post("chat/completions", request).await
+    pub async fn create(
+        client: &Client,
+        request: &ChatCompletionRequest,
+    ) -> ApiResponseOrError<Self> {
+        openai_post(client, "chat/completions", request).await
     }
 }
 
 impl ChatCompletionBuilder {
-    pub async fn create(self) -> ApiResponseOrError<ChatCompletion> {
-        ChatCompletion::create(&self.build().unwrap()).await
+    pub async fn create(self, client: &Client) -> ApiResponseOrError<ChatCompletion> {
+        ChatCompletion::create(client, &self.build().unwrap()).await
     }
 }
 
@@ -142,7 +146,7 @@ mod tests {
             }],
         )
         .temperature(0.0)
-        .create()
+        .create(&Client::new())
         .await
         .unwrap()
         .unwrap();

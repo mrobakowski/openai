@@ -3,6 +3,7 @@
 //! Related guide: [Embeddings](https://beta.openai.com/docs/guides/embeddings)
 
 use super::{models::ModelID, openai_post, ApiResponseOrError};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Clone)]
@@ -46,9 +47,15 @@ impl Embeddings {
     ///   Each input must not exceed 8192 tokens in length.
     /// * `user` - A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
     ///   [Learn more](https://beta.openai.com/docs/guides/safety-best-practices/end-user-ids).
-    pub async fn create(model: ModelID, input: Vec<&str>, user: &str) -> ApiResponseOrError<Self> {
+    pub async fn create(
+        client: &Client,
+        model: ModelID,
+        input: Vec<&str>,
+        user: &str,
+    ) -> ApiResponseOrError<Self> {
         openai_post(
-                "embeddings",
+            client,
+            "embeddings",
             &CreateEmbeddingsRequestBody { model, input, user },
         )
         .await
@@ -71,8 +78,8 @@ impl Embeddings {
 }
 
 impl Embedding {
-    pub async fn create(model: ModelID, input: &str, user: &str) -> ApiResponseOrError<Self> {
-        let response = Embeddings::create(model, vec![input], user).await?;
+    pub async fn create(client: &Client, model: ModelID, input: &str, user: &str) -> ApiResponseOrError<Self> {
+        let response = Embeddings::create(client, model, vec![input], user).await?;
 
         match response {
             Ok(mut embeddings) => Ok(Ok(embeddings.data.swap_remove(0))),
@@ -103,6 +110,7 @@ mod tests {
         dotenv().ok();
 
         let embeddings = Embeddings::create(
+            &Client::new(),
             ModelID::TextEmbeddingAda002,
             vec!["The food was delicious and the waiter..."],
             "",
@@ -119,6 +127,7 @@ mod tests {
         dotenv().ok();
 
         let embedding = Embedding::create(
+            &Client::new(),
             ModelID::TextEmbeddingAda002,
             "The food was delicious and the waiter...",
             "",

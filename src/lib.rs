@@ -18,12 +18,11 @@ pub struct Usage {
 
 type ApiResponseOrError<T> = Result<Result<T, OpenAiError>, reqwest::Error>;
 
-async fn openai_request<F, T>(method: Method, route: &str, builder: F) -> ApiResponseOrError<T>
+async fn openai_request<F, T>(client: &Client, method: Method, route: &str, builder: F) -> ApiResponseOrError<T>
 where
     F: FnOnce(RequestBuilder) -> RequestBuilder,
     T: DeserializeOwned,
 {
-    let client = Client::new();
     let mut request = client.request(method, BASE_URL.to_owned() + route);
 
     request = builder(request);
@@ -36,17 +35,17 @@ where
     }
 }
 
-async fn openai_get<T>(route: &str) -> ApiResponseOrError<T>
+async fn openai_get<T>(client: &Client, route: &str) -> ApiResponseOrError<T>
 where
     T: DeserializeOwned,
 {
-    openai_request(Method::GET, route, |request| request).await
+    openai_request(client, Method::GET, route, |request| request).await
 }
 
-async fn openai_post<J, T>(route: &str, json: &J) -> ApiResponseOrError<T>
+async fn openai_post<J, T>(client: &Client, route: &str, json: &J) -> ApiResponseOrError<T>
 where
     J: Serialize + ?Sized,
     T: DeserializeOwned,
 {
-    openai_request(Method::POST, route, |request| request.json(json)).await
+    openai_request(client, Method::POST, route, |request| request.json(json)).await
 }

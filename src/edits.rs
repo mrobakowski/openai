@@ -2,6 +2,7 @@
 
 use super::{models::ModelID, openai_post, ApiResponseOrError, OpenAiError, Usage};
 use derive_builder::Builder;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Clone)]
@@ -56,8 +57,8 @@ pub struct EditRequest {
 }
 
 impl Edit {
-    async fn create(request: &EditRequest) -> ApiResponseOrError<Self> {
-        let response: Result<Self, OpenAiError> = openai_post("edits", request).await?;
+    async fn create(client: &Client, request: &EditRequest) -> ApiResponseOrError<Self> {
+        let response: Result<Self, OpenAiError> = openai_post(client, "edits", request).await?;
 
         match response {
             Ok(mut edit) => {
@@ -80,7 +81,7 @@ impl Edit {
 
 impl EditBuilder {
     pub async fn create(self) -> ApiResponseOrError<Edit> {
-        Edit::create(&self.build().unwrap()).await
+        Edit::create(&Client::new(), &self.build().unwrap()).await
     }
 }
 
