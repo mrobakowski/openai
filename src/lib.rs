@@ -1,10 +1,8 @@
-use openai_bootstrap::{authorization, ApiResponse, BASE_URL};
 pub use openai_bootstrap::OpenAiError;
-use reqwest::{Method, RequestBuilder};
-use reqwest_eventsource::EventSource;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use openai_bootstrap::{authorization, ApiResponse, BASE_URL};
 pub use reqwest::Client;
-use futures::StreamExt;
+use reqwest::{Method, RequestBuilder};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 pub mod chat;
 pub mod completions;
@@ -12,7 +10,7 @@ pub mod edits;
 pub mod embeddings;
 pub mod models;
 
-#[derive(Deserialize, Clone, Copy)]
+#[derive(Deserialize, Clone, Copy, Debug)]
 pub struct Usage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
@@ -21,7 +19,12 @@ pub struct Usage {
 
 type ApiResponseOrError<T> = Result<Result<T, OpenAiError>, reqwest::Error>;
 
-async fn openai_request<F, T>(client: &Client, method: Method, route: &str, builder: F) -> ApiResponseOrError<T>
+async fn openai_request<F, T>(
+    client: &Client,
+    method: Method,
+    route: &str,
+    builder: F,
+) -> ApiResponseOrError<T>
 where
     F: FnOnce(RequestBuilder) -> RequestBuilder,
     T: DeserializeOwned,
@@ -30,20 +33,12 @@ where
 
     request = builder(request);
 
-    let mut  events = EventSource::new(authorization!(request)).unwrap();
+    let api_response: ApiResponse<T> = authorization!(request).send().await?.json().await?;
 
-    while let Some(event) = events.next().await {
-        dbg!(event);
+    match api_response {
+        ApiResponse::Ok(t) => Ok(Ok(t)),
+        ApiResponse::Err { error } => Ok(Err(error)),
     }
-
-    // let api_response: ApiResponse<T> = todo!().send().await?.json().await?;
-
-    todo!();
-
-    // match api_response {
-    //     ApiResponse::Ok(t) => Ok(Ok(t)),
-    //     ApiResponse::Err { error } => Ok(Err(error)),
-    // }
 }
 
 async fn openai_get<T>(client: &Client, route: &str) -> ApiResponseOrError<T>

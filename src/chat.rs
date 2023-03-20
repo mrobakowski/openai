@@ -2,11 +2,14 @@
 
 use super::{models::ModelID, openai_post, ApiResponseOrError, Usage};
 use derive_builder::Builder;
-use reqwest::Client;
+use futures::{Stream, StreamExt};
+use openai_bootstrap::{authorization, BASE_URL};
+use reqwest::{Client, Method};
+use reqwest_eventsource::{Event, EventSource};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct ChatCompletion {
     pub id: String,
     pub object: String,
@@ -16,11 +19,35 @@ pub struct ChatCompletion {
     pub usage: Option<Usage>,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug, PartialEq)]
+pub struct ChatCompletionEvent {
+    pub id: String,
+    pub object: String,
+    pub created: u64,
+    pub model: ModelID,
+    pub choices: Vec<ChatCompletionChoiceDelta>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
 pub struct ChatCompletionChoice {
     pub index: u64,
     pub message: ChatCompletionMessage,
     pub finish_reason: String,
+}
+
+#[derive(Deserialize, Clone, Debug, PartialEq)]
+pub struct ChatCompletionChoiceDelta {
+    pub index: u64,
+    pub delta: Delta,
+    pub finish_reason: Option<String>,
+}
+
+#[derive(Deserialize, Clone, Debug, PartialEq)]
+#[serde(untagged)]
+pub enum Delta {
+    Role { role: ChatCompletionMessageRole },
+    Content { content: String },
+    EndOfStream {},
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -34,7 +61,7 @@ pub struct ChatCompletionMessage {
     pub name: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, Copy)]
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum ChatCompletionMessageRole {
     System,
@@ -126,6 +153,24 @@ impl ChatCompletionBuilder {
     pub async fn create(self, client: &Client) -> ApiResponseOrError<ChatCompletion> {
         ChatCompletion::create(client, &self.build().unwrap()).await
     }
+
+    pub async fn create_stream(self, client: &Client) -> impl Stream<Item = ChatCompletionEvent> {
+        let request = client
+            .request(Method::POST, BASE_URL.to_owned() + "chat/completions")
+            .json(&self.build().unwrap());
+
+        let events = EventSource::new(authorization!(request)).unwrap();
+
+        events.filter_map(|e| async move {
+            match e.unwrap() {
+                Event::Open => None,
+                Event::Message(msg) => {
+                    let x: ChatCompletionEvent = serde_json::from_str(&msg.data).unwrap();
+                    Some(x)
+                }
+            }
+        })
+    }
 }
 
 #[cfg(test)]
@@ -154,6 +199,82 @@ mod tests {
         assert_eq!(
             chat_completion.choices.first().unwrap().message.content,
             "\n\nHello there! How can I assist you today?"
+        );
+    }
+
+    #[test]
+    fn test_event_deserialization() {
+        let role = r#"{
+            "id": "chatcmpl-6wBU7HGxEXqdShNC81ZlfkOLDM0MF",
+            "object": "chat.completion.chunk",
+            "created": 1679325191,
+            "model": "gpt-3.5-turbo",
+            "choices": [{"delta": {"role": "assistant"}, "index": 0, "finish_reason":null}]
+        }"#;
+        let content = r#"{
+            "id": "chatcmpl-6wBU7HGxEXqdShNC81ZlfkOLDM0MF",
+            "object": "chat.completion.chunk",
+            "created": 1679325191,
+            "model": "gpt-3.5-turbo",
+            "choices": [{"delta": {"content": "foobar"}, "index": 0, "finish_reason":null}]
+        }"#;
+        let end_of_stream = r#"{
+            "id": "chatcmpl-6wBU7HGxEXqdShNC81ZlfkOLDM0MF",
+            "object": "chat.completion.chunk",
+            "created": 1679325191,
+            "model": "gpt-3.5-turbo",
+            "choices": [{"delta": {}, "index": 0, "finish_reason": "stop"}]
+        }"#;
+
+        let role: ChatCompletionEvent = serde_json::from_str(role).unwrap();
+        let content: ChatCompletionEvent = serde_json::from_str(content).unwrap();
+        let end_of_stream: ChatCompletionEvent = serde_json::from_str(end_of_stream).unwrap();
+
+        assert_eq!(
+            role,
+            ChatCompletionEvent {
+                id: "chatcmpl-6wBU7HGxEXqdShNC81ZlfkOLDM0MF".into(),
+                object: "chat.completion.chunk".into(),
+                created: 1679325191,
+                model: ModelID::Gpt3_5Turbo,
+                choices: vec![ChatCompletionChoiceDelta {
+                    index: 0,
+                    delta: Delta::Role {
+                        role: ChatCompletionMessageRole::Assistant
+                    },
+                    finish_reason: None
+                }]
+            }
+        );
+        assert_eq!(
+            content,
+            ChatCompletionEvent {
+                id: "chatcmpl-6wBU7HGxEXqdShNC81ZlfkOLDM0MF".into(),
+                object: "chat.completion.chunk".into(),
+                created: 1679325191,
+                model: ModelID::Gpt3_5Turbo,
+                choices: vec![ChatCompletionChoiceDelta {
+                    index: 0,
+                    delta: Delta::Content {
+                        content: "foobar".into()
+                    },
+                    finish_reason: None
+                }]
+            }
+        );
+        assert_eq!(
+            end_of_stream,
+            ChatCompletionEvent {
+                id: "chatcmpl-6wBU7HGxEXqdShNC81ZlfkOLDM0MF".into(),
+                object: "chat.completion.chunk".into(),
+                created: 1679325191,
+                model: ModelID::Gpt3_5Turbo,
+                choices: vec![ChatCompletionChoiceDelta {
+                    index: 0,
+                    delta: Delta::EndOfStream {},
+                    finish_reason: Some("stop".into())
+                }]
+            }
         );
     }
 }
