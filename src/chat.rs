@@ -154,7 +154,7 @@ impl ChatCompletionBuilder {
         ChatCompletion::create(client, &self.build().unwrap()).await
     }
 
-    pub async fn create_stream(self, client: &Client) -> impl Stream<Item = ChatCompletionEvent> {
+    pub fn create_stream(self, client: &Client) -> impl Stream<Item = ChatCompletionEvent> {
         let request = client
             .request(Method::POST, BASE_URL.to_owned() + "chat/completions")
             .json(&self.build().unwrap());
