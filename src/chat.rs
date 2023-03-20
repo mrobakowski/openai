@@ -161,11 +161,12 @@ impl ChatCompletionBuilder {
 
         let events = EventSource::new(authorization!(request)).unwrap();
 
-        events.filter_map(|e| match e.unwrap() {
-            Event::Message(msg) if msg.data != "[DONE]" => {
+        events.filter_map(|e| match e {
+            Ok(Event::Message(msg)) if msg.data != "[DONE]" => {
                 let x: ChatCompletionEvent = serde_json::from_str(&msg.data).unwrap();
                 future::ready(Some(x))
             }
+            // TODO: don't swallow all the errors here
             _ => future::ready(None),
         })
     }
