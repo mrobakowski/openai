@@ -2,7 +2,7 @@
 
 use super::{models::ModelID, openai_post, ApiResponseOrError, Usage};
 use derive_builder::Builder;
-use futures::{Stream, StreamExt, future};
+use futures::{future, Stream, StreamExt};
 use openai_bootstrap::{authorization, BASE_URL};
 use reqwest::{Client, Method};
 use reqwest_eventsource::{Event, EventSource};
@@ -161,14 +161,12 @@ impl ChatCompletionBuilder {
 
         let events = EventSource::new(authorization!(request)).unwrap();
 
-        events.filter_map(|e| {
-            match e.unwrap() {
-                Event::Open => future::ready(None),
-                Event::Message(msg) => {
-                    let x: ChatCompletionEvent = serde_json::from_str(&msg.data).unwrap();
-                    future::ready(Some(x))
-                }
+        events.filter_map(|e| match e.unwrap() {
+            Event::Message(msg) if msg.data != "[DONE]" => {
+                let x: ChatCompletionEvent = serde_json::from_str(&msg.data).unwrap();
+                future::ready(Some(x))
             }
+            _ => future::ready(None),
         })
     }
 }
